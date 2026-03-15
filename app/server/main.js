@@ -42,17 +42,17 @@ Meteor.startup(() => {
           const hasIntent = intentWords.some(word => noteContent.toLowerCase().includes(word));
           
           // 2. Whale Filter: Only analyze if it's a large amount (e.g., > 5000 sats)
+          // FIX: Some relays use 'amount' in millisats, others don't. 
+          // We'll try to find it or label it as 'Micro-zap'
           const amountTag = event.tags.find(t => t[0] === 'amount');
-          const amountSats = amountTag ? Math.floor(parseInt(amountTag[1]) / 1000) : 0;
+          const amountSats = amountTag ? Math.floor(parseInt(amountTag[1]) / 1000) : "1+";
           const isWhale = amountSats >= 5000;
 
           // Only trigger Gemini if there is a hint of Signal, to save your API quota
-          if (!hasIntent && !isWhale && noteContent.length < 5) {
-            // Silently skip the 1-sat "GMs"
-            return; 
-          }
+          // SKEPTIC GATE: Don't even ask Gemini if it's an empty emoji zap
+          if (noteContent.trim().length < 3) return;
 
-          console.log(`🎯 TARGET SPOTTED: From ${zapRequest.pubkey.substring(0,8)}...`);
+          console.log(`🎯 TARGET SPOTTED: "${noteContent.substring(0, 20)}..."`);
           
           // --- ADD THE PROMPT HERE ---
           const prompt = `
@@ -80,13 +80,17 @@ Meteor.startup(() => {
           const rawText = result.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
           const aiResponse = JSON.parse(rawText);
 
+          // ONLY add to UI if it's not noise, or if confidence is low (worth a second look)
+          const isSignal = aiResponse.verdict.toUpperCase().includes("SIGNAL");
+
           volatileLeads.unshift({
             id: event.id,
-            sender: shortSender,
             amount: amountSats,
             note: noteContent,
+            sender: zapRequest.pubkey.substring(0, 8),
             confidence: aiResponse.confidence,
             verdict: aiResponse.verdict,
+            isSignal: isSignal, // Pass this to the UI for styling
             time: new Date().toLocaleTimeString()
           });
 

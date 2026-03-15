@@ -5,6 +5,11 @@
     .lead-card { border: 1px solid #333; padding: 10px; margin-bottom: 10px; }
     .high-confidence { border-color: #0f0; }
     .low-confidence { border-color: #550; color: #888; }
+    .signal-glow { border: 2px solid #00ff00; box-shadow: 0 0 10px #00ff0033; background: #001a00; }
+    .noise-dim { border: 1px solid #333; opacity: 0.6; }
+    .bolt { color: #ffcc00; font-weight: bold; margin-right: 15px; }
+    .pubkey { color: #888; font-size: 0.8em; }
+    .ai-box { margin-top: 10px; border-top: 1px solid #222; padding-top: 5px; font-size: 0.9em; }
   </style>
 </head>
 
@@ -14,13 +19,23 @@
 </body>
 
 <template name="leadBoard">
-  <p>Polling server memory every 3 seconds...</p>
-  
+  <div class="stats">
+    Monitoring Firehose... ({{leads.length}} events in memory)
+  </div>
+
   {{#each leads}}
-    <div class="lead-card {{#if isHighConfidence confidence}}high-confidence{{/if}}">
-      <h3>⚡ {{amount}} SATS | From: {{sender}}</h3>
-      <p><strong>Note:</strong> {{note}}</p>
-      <p><strong>Intelligence:</strong> {{verdict}} ({{confidence}}%)</p>
+    <div class="lead-card {{#if isSignal}}signal-glow{{else}}noise-dim{{/if}}">
+      <div class="header">
+        <span class="bolt">⚡ {{amount}} SATS</span>
+        <span class="pubkey">From: {{sender}}...</span>
+      </div>
+      
+      <p class="note">"{{note}}"</p>
+      
+      <div class="ai-box">
+        <strong>Verdict:</strong> {{verdict}} 
+        <span class="conf">({{confidence}}%)</span>
+      </div>
     </div>
   {{/each}}
 </template>
