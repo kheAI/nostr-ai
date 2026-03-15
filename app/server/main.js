@@ -1,6 +1,7 @@
 import { Meteor } from 'meteor/meteor';
 import NDK from '@nostr-dev-kit/ndk';
 import { GoogleGenAI } from '@google/genai';
+import bolt11 from 'light-bolt11-decoder';
 
 const apiKey = process.env.GEMINI_API_KEY;
 
@@ -22,41 +23,65 @@ Meteor.startup(() => {
     try {
       console.log("📡 Attempting to connect to Nostr relays...");
       await ndk.connect(5000); 
-      console.log("🔥 Zap Hunter (Safe Mode) Online!");
+      console.log("🔥 Zap Hunter Online & Monitoring...");
 
       const sub = ndk.subscribe({ kinds: [9735], limit: 10 }, { closeOnEose: false });
 
       sub.on("event", async (event) => {
         try {
+          // 1. EXTRACT CORE TAGS
           const descriptionTag = event.tags.find(t => t[0] === 'description');
-          if (!descriptionTag) return;
+          if (!descriptionTag) return; // Not a valid zap receipt
+
           const eTag = event.tags.find(t => t[0] === 'e');
-          const zappedNoteId = eTag ? eTag[1] : event.id; // Fallback to the zap itself if no note
-
-          const zapRequest = JSON.parse(descriptionTag[1]);
-          const senderPubkey = zapRequest.pubkey; // This is the "Zapped By" hex
-          const shortSender = `${senderPubkey.substring(0, 8)}...`;
-          const noteContent = zapRequest.content || "";
-         
-          // --- ADVANCED FILTER LOGIC ---
-          // 1. Keyword Filter: Only analyze if it contains specific "intent" words
-          const intentWords = ['fix', 'build', 'bounty', 'hire', 'feature', 'tool'];
-          const hasIntent = intentWords.some(word => noteContent.toLowerCase().includes(word));
+          const zappedNoteId = eTag ? eTag[1] : event.id;
           
-          // 2. Whale Filter: Only analyze if it's a large amount (e.g., > 5000 sats)
-          // FIX: Some relays use 'amount' in millisats, others don't. 
-          // We'll try to find it or label it as 'Micro-zap'
+          const bolt11Tag = event.tags.find(t => t[0] === 'bolt11');
           const amountTag = event.tags.find(t => t[0] === 'amount');
-          const amountSats = amountTag ? Math.floor(parseInt(amountTag[1]) / 1000) : "1+";
-          const isWhale = amountSats >= 5000;
 
-          // Only trigger Gemini if there is a hint of Signal, to save your API quota
-          // SKEPTIC GATE: Don't even ask Gemini if it's an empty emoji zap
+          // 2. CALCULATE EXACT SATS (Primary: Bolt11, Fallback: Amount Tag)
+          let amountSats = 0;
+          if (bolt11Tag) {
+            try {
+              const decoded = bolt11.decode(bolt11Tag[1]);
+              const millisatoshis = decoded.sections.find(s => s.name === 'amount').value;
+              amountSats = Math.floor(millisatoshis / 1000);
+            } catch (e) {
+              // Silently catch invoice errors and rely on the fallback below
+            }
+          }
+          
+          if (amountSats === 0 && amountTag) {
+            amountSats = Math.floor(parseInt(amountTag[1]) / 1000);
+          }
+
+          // 3. PARSE SENDER & NOTE
+          const zapRequest = JSON.parse(descriptionTag[1]);
+          const shortSender = zapRequest.pubkey ? `${zapRequest.pubkey.substring(0, 8)}...` : "Unknown";
+          const noteContent = zapRequest.content || "";
+
+          // ==========================================
+          // 4. SKEPTIC GATES (Filter before AI execution)
+          // ==========================================
+          
+          // Gate A: Ignore micro-dust (< 100 sats)
+          if (amountSats < 100) return;
+
+          // Gate B: Ignore empty or 1-emoji notes
           if (noteContent.trim().length < 3) return;
 
-          console.log(`🎯 TARGET SPOTTED: "${noteContent.substring(0, 20)}..."`);
+          // Gate C: API Quota Saver. Only analyze Whales or explicit intent.
+          const intentWords = ['fix', 'build', 'bounty', 'hire', 'feature', 'tool'];
+          const hasIntent = intentWords.some(word => noteContent.toLowerCase().includes(word));
+          const isWhale = amountSats > 0;
           
-          // --- ADD THE PROMPT HERE ---
+          //if (!hasIntent || !isWhale) return; 
+
+          // ==========================================
+
+          console.log(`🎯 TARGET SPOTTED: "${noteContent.substring(0, 20)}..." (${amountSats} SATS)`);
+
+          // 5. ECONOMIC INTELLIGENCE ANALYSIS
           const prompt = `
             You are an Economic Intelligence Agent. 
             Context: A user just sent ${amountSats} sats on Nostr with the note: "${noteContent}".
@@ -71,29 +96,25 @@ Meteor.startup(() => {
             Reply ONLY in JSON: {"confidence": 0-100, "verdict": "string"}
           `;
 
-          console.log(`🧠 Analyzing Zap: "${noteContent.substring(0, 30)}..."`);
-
           const result = await ai.models.generateContent({
             model: 'gemini-3.1-flash-lite-preview',
-            // --- USE THE PROMPT VARIABLE HERE ---
             contents: [{ role: 'user', parts: [{ text: prompt }] }]
           });
 
           const rawText = result.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
           const aiResponse = JSON.parse(rawText);
-
-          // ONLY add to UI if it's not noise, or if confidence is low (worth a second look)
           const isSignal = aiResponse.verdict.toUpperCase().includes("SIGNAL");
 
+          // 6. UPDATE DASHBOARD
           volatileLeads.unshift({
             id: event.id,
             zappedNoteId: zappedNoteId,
             amount: amountSats,
             note: noteContent,
-            sender: zapRequest.pubkey.substring(0, 8),
+            sender: shortSender,
             confidence: aiResponse.confidence,
             verdict: aiResponse.verdict,
-            isSignal: isSignal, // Pass this to the UI for styling
+            isSignal: isSignal,
             time: new Date().toLocaleTimeString()
           });
 
@@ -101,7 +122,7 @@ Meteor.startup(() => {
           console.log(`✅ Result: ${aiResponse.verdict} (${aiResponse.confidence}%)`);
 
         } catch (err) {
-           console.error("❌ Processing Error:", err.message);
+            console.error("❌ Processing Error on Zap:", err.message);
         }
       });
 
