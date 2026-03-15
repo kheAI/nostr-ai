@@ -13,7 +13,7 @@ const volatileLeads = [];
 const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy_key' });
 
 const ndk = new NDK({ 
-  explicitRelayUrls: ["wss://relay.damus.io", "wss://nos.lol"] 
+  explicitRelayUrls: ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.nostr.band", "wss://purplepag.es"] 
 });
 
 Meteor.startup(() => {
@@ -58,12 +58,12 @@ Meteor.startup(() => {
           // 3. PARSE SENDER & NOTE
           const zapRequest = JSON.parse(descriptionTag[1]);
           const senderPubkey = zapRequest.pubkey;
-          const shortSender = zapRequest.pubkey ? `${zapRequest.pubkey.substring(0, 8)}...` : "Unknown";
+          const shortSender = zapRequest.pubkey ? `${zapRequest.pubkey}...` : "Unknown";
           const noteContent = zapRequest.content || "";
 
           const pTag = event.tags.find(t => t[0] === 'p'); // The 'p' tag on the Zap Receipt indicates who received the funds
           const recipientPubkey = pTag ? pTag[1] : "Unknown";
-          const shortRecipient = recipientPubkey !== "Unknown" ? `${recipientPubkey.substring(0, 8)}...` : "Unknown";
+          const shortRecipient = recipientPubkey !== "Unknown" ? `${recipientPubkey}...` : "Unknown";
           const kTag = zapRequest.tags.find(t => t[0] === 'k');
           const aTag = zapRequest.tags.find(t => t[0] === 'a');
           
@@ -124,7 +124,7 @@ Meteor.startup(() => {
             BE SKEPTICAL. 
             - If the note is empty, it is 99% NOISE.
             - If the note contains words like "fix", "feature", "build", "hire", or "thanks for the tool", it is SIGNAL.
-            - Contextual Weight: A 5000 sat zap on a "Long-form Article" saying "Great write up" is NOISE (general appreciation). A 5000 sat zap on a "Short Note" saying "Fix this bug" is SIGNAL (bounty).
+            - Contextual Weight: A 5000 sat zap on a "Short Note" saying "Fix this bug" is SIGNAL (bounty).
             
             Reply ONLY in JSON: {"confidence": 0-100, "verdict": "string"}
           `;
