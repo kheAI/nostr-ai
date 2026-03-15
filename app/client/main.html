@@ -17,11 +17,10 @@
   <p>Polling server memory every 3 seconds...</p>
   
   {{#each leads}}
-    <div class="lead-card {{#if isHighConfidence confidence}}high-confidence{{else}}low-confidence{{/if}}">
-      <h3>⚡ {{amount}} SATS | Confidence: {{confidence}}%</h3>
+    <div class="lead-card {{#if isHighConfidence confidence}}high-confidence{{/if}}">
+      <h3>⚡ {{amount}} SATS | From: {{sender}}</h3>
       <p><strong>Note:</strong> {{note}}</p>
-      <p><strong>Agent Verdict:</strong> {{verdict}}</p>
-      <small>Detected at: {{time}}</small>
+      <p><strong>Intelligence:</strong> {{verdict}} ({{confidence}}%)</p>
     </div>
   {{/each}}
 </template>

@@ -32,9 +32,27 @@ Meteor.startup(() => {
           if (!descriptionTag) return;
 
           const zapRequest = JSON.parse(descriptionTag[1]);
-          const noteContent = zapRequest.content || "No note.";
+          const senderPubkey = zapRequest.pubkey; // This is the "Zapped By" hex
+          const shortSender = `${senderPubkey.substring(0, 8)}...`;
+          const noteContent = zapRequest.content || "";
+         
+          // --- ADVANCED FILTER LOGIC ---
+          // 1. Keyword Filter: Only analyze if it contains specific "intent" words
+          const intentWords = ['fix', 'build', 'bounty', 'hire', 'feature', 'tool'];
+          const hasIntent = intentWords.some(word => noteContent.toLowerCase().includes(word));
+          
+          // 2. Whale Filter: Only analyze if it's a large amount (e.g., > 5000 sats)
           const amountTag = event.tags.find(t => t[0] === 'amount');
-          const amountSats = amountTag ? Math.floor(parseInt(amountTag[1]) / 1000) : "10k+";
+          const amountSats = amountTag ? Math.floor(parseInt(amountTag[1]) / 1000) : 0;
+          const isWhale = amountSats >= 5000;
+
+          // Only trigger Gemini if there is a hint of Signal, to save your API quota
+          if (!hasIntent && !isWhale && noteContent.length < 5) {
+            // Silently skip the 1-sat "GMs"
+            return; 
+          }
+
+          console.log(`🎯 TARGET SPOTTED: From ${zapRequest.pubkey.substring(0,8)}...`);
           
           // --- ADD THE PROMPT HERE ---
           const prompt = `
@@ -64,6 +82,7 @@ Meteor.startup(() => {
 
           volatileLeads.unshift({
             id: event.id,
+            sender: shortSender,
             amount: amountSats,
             note: noteContent,
             confidence: aiResponse.confidence,
