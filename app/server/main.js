@@ -2,12 +2,10 @@ import { Meteor } from 'meteor/meteor';
 import NDK from '@nostr-dev-kit/ndk';
 import { GoogleGenAI } from '@google/genai';
 
-// 1. Check for the API Key immediately
 const apiKey = process.env.GEMINI_API_KEY;
 
 if (!apiKey) {
-  console.log("❌ ERROR: GEMINI_API_KEY is not set in your terminal!");
-  console.log("Fix: run 'export GEMINI_API_KEY=your_key_here' before 'meteor run'");
+  console.log("❌ ERROR: GEMINI_API_KEY is not set!");
 }
 
 const volatileLeads = [];
@@ -17,41 +15,48 @@ const ndk = new NDK({
   explicitRelayUrls: ["wss://relay.damus.io", "wss://nos.lol"] 
 });
 
-// We remove 'async' from the main startup to prevent the Meteor boot-hang
 Meteor.startup(() => {
   console.log("⏳ Meteor is starting up...");
 
-  // Run the Nostr logic in a separate "task" so the server can finish booting
   (async () => {
     try {
       console.log("📡 Attempting to connect to Nostr relays...");
-      
-      // Add a 5-second timeout to the connection so it doesn't hang forever
       await ndk.connect(5000); 
-      
       console.log("🔥 Zap Hunter (Safe Mode) Online!");
 
       const sub = ndk.subscribe({ kinds: [9735], limit: 10 }, { closeOnEose: false });
 
       sub.on("event", async (event) => {
-        // DEBUG: See every zap hitting your server
-        console.log(`📩 Received Zap Receipt: ${event.id.substring(0, 8)}...`);
-
         try {
           const descriptionTag = event.tags.find(t => t[0] === 'description');
           if (!descriptionTag) return;
 
           const zapRequest = JSON.parse(descriptionTag[1]);
           const noteContent = zapRequest.content || "No note.";
+          const amountTag = event.tags.find(t => t[0] === 'amount');
+          const amountSats = amountTag ? Math.floor(parseInt(amountTag[1]) / 1000) : "10k+";
           
-          // 3. Temporarily set threshold to 0 just to verify the AI is working
-          const threshold = 0; 
+          // --- ADD THE PROMPT HERE ---
+          const prompt = `
+            You are an Economic Intelligence Agent. 
+            Context: A user just sent ${amountSats} sats on Nostr with the note: "${noteContent}".
+            
+            TASK: Determine if this is:
+            1. SIGNAL: A payment for a service, a bug bounty, or a professional tip.
+            2. NOISE: A "GM", a meme, or a random social "Like".
+            
+            BE SKEPTICAL. If the note is empty, it is 99% NOISE.
+            If the note contains words like "fix", "feature", "build", "hire", or "thanks for the tool", it is SIGNAL.
+            
+            Reply ONLY in JSON: {"confidence": 0-100, "verdict": "string"}
+          `;
 
-          console.log(`🧠 Asking AI to analyze: "${noteContent}"`);
+          console.log(`🧠 Analyzing Zap: "${noteContent.substring(0, 30)}..."`);
 
           const result = await ai.models.generateContent({
             model: 'gemini-3.1-flash-lite-preview',
-            contents: [{ role: 'user', parts: [{ text: `Analyze if this Nostr note is a business lead or social noise: "${noteContent}". Reply ONLY in JSON: {"confidence": 0-100, "verdict": "string"}` }] }]
+            // --- USE THE PROMPT VARIABLE HERE ---
+            contents: [{ role: 'user', parts: [{ text: prompt }] }]
           });
 
           const rawText = result.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -59,6 +64,7 @@ Meteor.startup(() => {
 
           volatileLeads.unshift({
             id: event.id,
+            amount: amountSats,
             note: noteContent,
             confidence: aiResponse.confidence,
             verdict: aiResponse.verdict,
@@ -66,7 +72,7 @@ Meteor.startup(() => {
           });
 
           if (volatileLeads.length > 15) volatileLeads.pop();
-          console.log("✅ Lead added to UI");
+          console.log(`✅ Result: ${aiResponse.verdict} (${aiResponse.confidence}%)`);
 
         } catch (err) {
            console.error("❌ Processing Error:", err.message);
@@ -78,7 +84,7 @@ Meteor.startup(() => {
     }
   })();
 
-  console.log("✅ Server boot sequence complete. Check localhost:3000");
+  console.log("✅ Server boot sequence complete.");
 });
 
 Meteor.methods({
