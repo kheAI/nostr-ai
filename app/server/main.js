@@ -57,8 +57,38 @@ Meteor.startup(() => {
 
           // 3. PARSE SENDER & NOTE
           const zapRequest = JSON.parse(descriptionTag[1]);
+          const senderPubkey = zapRequest.pubkey;
           const shortSender = zapRequest.pubkey ? `${zapRequest.pubkey.substring(0, 8)}...` : "Unknown";
           const noteContent = zapRequest.content || "";
+
+          const pTag = event.tags.find(t => t[0] === 'p'); // The 'p' tag on the Zap Receipt indicates who received the funds
+          const recipientPubkey = pTag ? pTag[1] : "Unknown";
+          const shortRecipient = recipientPubkey !== "Unknown" ? `${recipientPubkey.substring(0, 8)}...` : "Unknown";
+          const kTag = zapRequest.tags.find(t => t[0] === 'k');
+          const aTag = zapRequest.tags.find(t => t[0] === 'a');
+          
+          let contentType = "Unknown";
+          let targetKind = kTag ? kTag[1] : null;
+
+          // Fallback: If no 'k' tag, 'a' tags (for articles) look like "30023:pubkey:identifier"
+          if (!targetKind && aTag) {
+             targetKind = aTag[1].split(':')[0];
+          }
+
+          // Map the Nostr Kind integer to a human-readable label
+          if (targetKind) {
+             switch(targetKind) {
+                case "1": contentType = "Short Note / Reply"; break;
+                case "30023": contentType = "Long-form Article"; break;
+                case "34235": contentType = "Video"; break;
+                case "9802": contentType = "Highlight"; break;
+                case "30024": contentType = "Draft"; break;
+                default: contentType = `Kind ${targetKind}`;
+             }
+          } else {
+             // If a client didn't include a 'k' or 'a' tag, it's almost always a standard Kind 1
+             contentType = "Short Note / Reply"; 
+          }
 
           // ==========================================
           // 4. SKEPTIC GATES (Filter before AI execution)
@@ -73,7 +103,7 @@ Meteor.startup(() => {
           // Gate C: API Quota Saver. Only analyze Whales or explicit intent.
           const intentWords = ['fix', 'build', 'bounty', 'hire', 'feature', 'tool'];
           const hasIntent = intentWords.some(word => noteContent.toLowerCase().includes(word));
-          const isWhale = amountSats > 100;
+          const isWhale = amountSats > 10;
           
           if (!hasIntent && !isWhale) return; 
 
@@ -84,14 +114,17 @@ Meteor.startup(() => {
           // 5. ECONOMIC INTELLIGENCE ANALYSIS
           const prompt = `
             You are an Economic Intelligence Agent. 
-            Context: A user just sent ${amountSats} sats on Nostr with the note: "${noteContent}".
+            Context: User (${shortSender}) just sent ${amountSats} sats to User (${shortRecipient}) for a "${contentType}".
+            The sender included this note: "${noteContent}".
             
             TASK: Determine if this is:
-            1. SIGNAL: A payment for a service, a bug bounty, or a professional tip.
-            2. NOISE: A "GM", a meme, or a random social "Like".
+            1. SIGNAL: A payment for a service, a bug bounty, a commission, or a professional tool tip.
+            2. NOISE: A "GM", a meme, general appreciation, or a random social "Like".
             
-            BE SKEPTICAL. If the note is empty, it is 99% NOISE.
-            If the note contains words like "fix", "feature", "build", "hire", or "thanks for the tool", it is SIGNAL.
+            BE SKEPTICAL. 
+            - If the note is empty, it is 99% NOISE.
+            - If the note contains words like "fix", "feature", "build", "hire", or "thanks for the tool", it is SIGNAL.
+            - Contextual Weight: A 5000 sat zap on a "Long-form Article" saying "Great write up" is NOISE (general appreciation). A 5000 sat zap on a "Short Note" saying "Fix this bug" is SIGNAL (bounty).
             
             Reply ONLY in JSON: {"confidence": 0-100, "verdict": "string"}
           `;
@@ -112,6 +145,8 @@ Meteor.startup(() => {
             amount: amountSats,
             note: noteContent,
             sender: shortSender,
+            recipient: shortRecipient, 
+            contentType: contentType,
             confidence: aiResponse.confidence,
             verdict: aiResponse.verdict,
             isSignal: isSignal,
@@ -136,6 +171,7 @@ Meteor.startup(() => {
 
 Meteor.methods({
   async 'getLatestLeads'() {
+    //console.log(volatileLeads);
     return volatileLeads;
   }
 });
