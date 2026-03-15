@@ -1,25 +1,27 @@
 <head>
-  <title>Meteor App</title>
+  <title>kheAI Nostr AI</title>
+  <style>
+    body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
+    .lead-card { border: 1px solid #333; padding: 10px; margin-bottom: 10px; }
+    .high-confidence { border-color: #0f0; }
+    .low-confidence { border-color: #550; color: #888; }
+  </style>
 </head>
 
 <body>
-  <h1>Welcome to Meteor!</h1>
-
-  {{> hello}}
-  {{> info}}
+  <h1>kheAI</h1>
+  {{> leadBoard}}
 </body>
 
-<template name="hello">
-  <button>Click Me</button>
-  <p>You've pressed the button {{counter}} times.</p>
-</template>
-
-<template name="info">
-  <h2>Learn Meteor!</h2>
-  <ul>
-    <li><a href="https://www.meteor.com/try" target="_blank">Do the Tutorial</a></li>
-    <li><a href="http://guide.meteor.com" target="_blank">Follow the Guide</a></li>
-    <li><a href="https://docs.meteor.com" target="_blank">Read the Docs</a></li>
-    <li><a href="https://forums.meteor.com" target="_blank">Discussions</a></li>
-  </ul>
+<template name="leadBoard">
+  <p>Polling server memory every 3 seconds...</p>
+  
+  {{#each leads}}
+    <div class="lead-card {{#if isHighConfidence confidence}}high-confidence{{else}}low-confidence{{/if}}">
+      <h3>⚡ {{amount}} SATS | Confidence: {{confidence}}%</h3>
+      <p><strong>Note:</strong> {{note}}</p>
+      <p><strong>Agent Verdict:</strong> {{verdict}}</p>
+      <small>Detected at: {{time}}</small>
+    </div>
+  {{/each}}
 </template>
