@@ -30,6 +30,8 @@ Meteor.startup(() => {
         try {
           const descriptionTag = event.tags.find(t => t[0] === 'description');
           if (!descriptionTag) return;
+          const eTag = event.tags.find(t => t[0] === 'e');
+          const zappedNoteId = eTag ? eTag[1] : event.id; // Fallback to the zap itself if no note
 
           const zapRequest = JSON.parse(descriptionTag[1]);
           const senderPubkey = zapRequest.pubkey; // This is the "Zapped By" hex
@@ -85,6 +87,7 @@ Meteor.startup(() => {
 
           volatileLeads.unshift({
             id: event.id,
+            zappedNoteId: zappedNoteId,
             amount: amountSats,
             note: noteContent,
             sender: zapRequest.pubkey.substring(0, 8),
