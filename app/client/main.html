@@ -21,6 +21,9 @@
 <template name="leadBoard">
   <div class="stats">
     Monitoring Firehose... ({{leads.length}} events in memory)
+    <button id="filter-toggle">
+      {{#if showOnlySignal}}x{{else}}Toggle Signal{{/if}}
+    </button>
   </div>
 
   {{#each leads}}

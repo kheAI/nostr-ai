@@ -4,6 +4,7 @@ import './main.html';
 
 Template.leadBoard.onCreated(function() {
   this.leadsData = new ReactiveVar([]);
+  this.showOnlySignal = new ReactiveVar(false);
 
   // Poll the server's in-memory array every 3 seconds
   this.interval = setInterval(async () => {
@@ -22,9 +23,19 @@ Template.leadBoard.onDestroyed(function() {
 
 Template.leadBoard.helpers({
   leads() {
-    return Template.instance().leadsData.get();
+    const allLeads = Template.instance().leadsData.get();
+    if (Template.instance().showOnlySignal.get()) {
+      return allLeads.filter(l => l.isSignal);
+    }
+    return allLeads;
   },
   isHighConfidence(score) {
     return score >= 80;
+  }
+});
+
+Template.leadBoard.events({
+  'click #filter-toggle'(event, instance) {
+    instance.showOnlySignal.set(!instance.showOnlySignal.get());
   }
 });
