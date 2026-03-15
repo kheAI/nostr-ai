@@ -73,9 +73,9 @@ Meteor.startup(() => {
           // Gate C: API Quota Saver. Only analyze Whales or explicit intent.
           const intentWords = ['fix', 'build', 'bounty', 'hire', 'feature', 'tool'];
           const hasIntent = intentWords.some(word => noteContent.toLowerCase().includes(word));
-          const isWhale = amountSats > 0;
+          const isWhale = amountSats > 100;
           
-          //if (!hasIntent || !isWhale) return; 
+          if (!hasIntent && !isWhale) return; 
 
           // ==========================================
 
