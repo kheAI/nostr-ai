@@ -1,22 +1,30 @@
 import { Template } from 'meteor/templating';
 import { ReactiveVar } from 'meteor/reactive-var';
-
 import './main.html';
 
-Template.hello.onCreated(function helloOnCreated() {
-  // counter starts at 0
-  this.counter = new ReactiveVar(0);
+Template.leadBoard.onCreated(function() {
+  this.leadsData = new ReactiveVar([]);
+
+  // Poll the server's in-memory array every 3 seconds
+  this.interval = setInterval(async () => {
+    try {
+      const data = await Meteor.callAsync('getLatestLeads');
+      this.leadsData.set(data);
+    } catch (err) {
+      console.error("Failed to fetch leads", err);
+    }
+  }, 3000);
 });
 
-Template.hello.helpers({
-  counter() {
-    return Template.instance().counter.get();
-  },
+Template.leadBoard.onDestroyed(function() {
+  clearInterval(this.interval);
 });
 
-Template.hello.events({
-  'click button'(event, instance) {
-    // increment the counter when button is clicked
-    instance.counter.set(instance.counter.get() + 1);
+Template.leadBoard.helpers({
+  leads() {
+    return Template.instance().leadsData.get();
   },
+  isHighConfidence(score) {
+    return score >= 80;
+  }
 });
