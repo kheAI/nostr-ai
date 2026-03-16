@@ -11,6 +11,7 @@
     "@babel/runtime": "^7.17.9",
     "@google/genai": "^1.45.0",
     "@nostr-dev-kit/ndk": "^3.0.3",
+    "dotenv": "^17.3.1",
     "jquery": "^3.6.0",
     "light-bolt11-decoder": "^3.2.0",
     "meteor-node-stubs": "^1.2.1"

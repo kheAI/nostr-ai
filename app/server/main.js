@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Meteor } from 'meteor/meteor';
 import NDK from '@nostr-dev-kit/ndk';
 import { GoogleGenAI } from '@google/genai';
@@ -18,6 +19,12 @@ const ndk = new NDK({
 
 Meteor.startup(() => {
   console.log("⏳ Meteor is starting up...");
+
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn("⚠️  WARNING: GEMINI_API_KEY is not set in .env file.");
+  } else {
+    console.log("✅  Sovereign AI Engine initialized with API Key.");
+  }
 
   (async () => {
     try {
